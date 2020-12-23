@@ -224,21 +224,26 @@ public class MQClientInstance {
 
         synchronized (this) {
             switch (this.serviceState) {
-                case CREATE_JUST:
+                case CREATE_JUST: // 仅仅创建不启动
                     this.serviceState = ServiceState.START_FAILED;
                     // If not specified,looking address from name server
+                    // 如果启动的时候命令行没有获取到nameSrv的地址 就直接去获取
                     if (null == this.clientConfig.getNamesrvAddr()) {
                         this.mQClientAPIImpl.fetchNameServerAddr();
                     }
                     // Start request-response channel
                     this.mQClientAPIImpl.start();
                     // Start various schedule tasks
+                    // 启动调度任务
                     this.startScheduledTask();
                     // Start pull service
+                    // 启动pull服务
                     this.pullMessageService.start();
                     // Start rebalance service
+                    // 启动负载均衡服务
                     this.rebalanceService.start();
                     // Start push service
+                    // 启动push服务
                     this.defaultMQProducer.getDefaultMQProducerImpl().start(false);
                     log.info("the client factory [{}] start OK", this.clientId);
                     this.serviceState = ServiceState.RUNNING;

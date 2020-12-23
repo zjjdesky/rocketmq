@@ -40,6 +40,7 @@ public class Configuration {
     private DataVersion dataVersion = new DataVersion();
     private ReadWriteLock readWriteLock = new ReentrantReadWriteLock();
     /**
+     * 所有的启动配置
      * All properties include configs in object and extend properties.
      */
     private Properties allConfigs = new Properties();

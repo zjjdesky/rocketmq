@@ -181,6 +181,7 @@ public class NettyRemotingClient extends NettyRemotingAbstract implements Remoti
                         }
                     }
                     pipeline.addLast(
+                        // 添加时间组
                         defaultEventExecutorGroup,
                         new NettyEncoder(),
                         new NettyDecoder(),
@@ -194,6 +195,7 @@ public class NettyRemotingClient extends NettyRemotingAbstract implements Remoti
             @Override
             public void run() {
                 try {
+                    // 扫描废弃的请求
                     NettyRemotingClient.this.scanResponseTable();
                 } catch (Throwable e) {
                     log.error("scanResponseTable exception", e);

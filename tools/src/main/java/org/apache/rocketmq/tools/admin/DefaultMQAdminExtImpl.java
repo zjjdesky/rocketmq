@@ -108,13 +108,13 @@ public class DefaultMQAdminExtImpl implements MQAdminExt, MQAdminExtInner {
     @Override
     public void start() throws MQClientException {
         switch (this.serviceState) {
-            case CREATE_JUST:
+            case CREATE_JUST: // 服务只启动 不创建
                 this.serviceState = ServiceState.START_FAILED;
 
                 this.defaultMQAdminExt.changeInstanceNameToPID();
-
+                // 创建mqClient
                 this.mqClientInstance = MQClientManager.getInstance().getAndCreateMQClientInstance(this.defaultMQAdminExt, rpcHook);
-
+                // 注册管理服务
                 boolean registerOK = mqClientInstance.registerAdminExt(this.defaultMQAdminExt.getAdminExtGroup(), this);
                 if (!registerOK) {
                     this.serviceState = ServiceState.CREATE_JUST;
@@ -122,7 +122,7 @@ public class DefaultMQAdminExtImpl implements MQAdminExt, MQAdminExtInner {
                         + "] has created already, specifed another name please."
                         + FAQUrl.suggestTodo(FAQUrl.GROUP_NAME_DUPLICATE_URL), null);
                 }
-
+                // 启动mqClient
                 mqClientInstance.start();
 
                 log.info("the adminExt [{}] start OK", this.defaultMQAdminExt.getAdminExtGroup());
