@@ -679,7 +679,7 @@ public class BrokerController {
         }
 
         this.registerBrokerAll(true, false);
-
+        // broker心跳发送
         this.scheduledExecutorService.scheduleAtFixedRate(new Runnable() {
 
             @Override

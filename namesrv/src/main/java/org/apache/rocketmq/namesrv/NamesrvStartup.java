@@ -104,13 +104,13 @@ public class NamesrvStartup {
 
             // remember all configs to prevent discard
             controller.getConfiguration().registerConfig(properties);
-
+            // 初始化
             boolean initResult = controller.initialize();
             if (!initResult) {
                 controller.shutdown();
                 System.exit(-3);
             }
-
+            // 注册JVM钩子 如果代码中使用了线程池，一种优雅的方式就是注册一个JVM钩子函数，在JVM进程关闭之前，先将线程池关闭，及时释放资源
             Runtime.getRuntime().addShutdownHook(new ShutdownHookThread(log, new Callable<Void>() {
                 @Override
                 public Void call() throws Exception {

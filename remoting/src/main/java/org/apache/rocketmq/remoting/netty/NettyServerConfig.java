@@ -17,9 +17,21 @@
 package org.apache.rocketmq.remoting.netty;
 
 public class NettyServerConfig implements Cloneable {
+    /**
+     * 监听端口
+     */
     private int listenPort = 8888;
+    /**
+     * netty业务线程个数
+     */
     private int serverWorkerThreads = 8;
+    /**
+     * netty public任务线程个数
+     */
     private int serverCallbackExecutorThreads = 0;
+    /**
+     * IO线程池线程个数
+     */
     private int serverSelectorThreads = 3;
     private int serverOnewaySemaphoreValue = 256;
     private int serverAsyncSemaphoreValue = 64;
