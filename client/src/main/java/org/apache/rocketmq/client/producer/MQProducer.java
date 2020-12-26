@@ -30,23 +30,58 @@ public interface MQProducer extends MQAdmin {
 
     void shutdown();
 
+    /**
+     * 查找该主题下所有的消息队列
+     *
+     * @param topic
+     * @return
+     * @throws MQClientException
+     */
     List<MessageQueue> fetchPublishMessageQueues(final String topic) throws MQClientException;
 
+    /**
+     * 同步发送消息
+     *
+     * @param msg
+     * @return
+     * @throws MQClientException
+     * @throws RemotingException
+     * @throws MQBrokerException
+     * @throws InterruptedException
+     */
     SendResult send(final Message msg) throws MQClientException, RemotingException, MQBrokerException,
         InterruptedException;
 
     SendResult send(final Message msg, final long timeout) throws MQClientException,
         RemotingException, MQBrokerException, InterruptedException;
 
+    /**
+     * 异步发送消息
+     *
+     * @param msg
+     * @param sendCallback
+     * @throws MQClientException
+     * @throws RemotingException
+     * @throws InterruptedException
+     */
     void send(final Message msg, final SendCallback sendCallback) throws MQClientException,
         RemotingException, InterruptedException;
 
     void send(final Message msg, final SendCallback sendCallback, final long timeout)
         throws MQClientException, RemotingException, InterruptedException;
 
+    /**
+     * 单向消息发送
+     *
+     * @param msg
+     * @throws MQClientException
+     * @throws RemotingException
+     * @throws InterruptedException
+     */
     void sendOneway(final Message msg) throws MQClientException, RemotingException,
         InterruptedException;
 
+    /******************发送到指定消息队列*********************/
     SendResult send(final Message msg, final MessageQueue mq) throws MQClientException,
         RemotingException, MQBrokerException, InterruptedException;
 
@@ -62,6 +97,7 @@ public interface MQProducer extends MQAdmin {
     void sendOneway(final Message msg, final MessageQueue mq) throws MQClientException,
         RemotingException, InterruptedException;
 
+    /*****************指定消息选择算法***********************/
     SendResult send(final Message msg, final MessageQueueSelector selector, final Object arg)
         throws MQClientException, RemotingException, MQBrokerException, InterruptedException;
 

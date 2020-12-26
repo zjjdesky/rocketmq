@@ -55,6 +55,16 @@ public class MQFaultStrategy {
         this.sendLatencyFaultEnable = sendLatencyFaultEnable;
     }
 
+    /**
+     * 选择消息队列
+     *
+     * 选择消息队列有两种方式
+     * （1） sendLatencyFaultEnable = false 默认不启用broker故障延迟机制
+     * （2） sendLatencyFaultEnable = true 启用broker故障延迟机制
+     * @param tpInfo
+     * @param lastBrokerName
+     * @return
+     */
     public MessageQueue selectOneMessageQueue(final TopicPublishInfo tpInfo, final String lastBrokerName) {
         if (this.sendLatencyFaultEnable) {
             try {

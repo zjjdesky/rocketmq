@@ -590,12 +590,26 @@ public class MQClientInstance {
         }
     }
 
+    /**
+     * 消息生产者更新和维护路由缓存
+     * 1. 如果isDefault为true，则使用默认主题去查询，如果查询到路由信息，则替换路由信息中读写队列个数为消息生产者默认的队列个数。
+     *    如果isDefault为false，则使用topic去查询；如果为查询到路由信息，则返回false，表示路由信息未变化
+     * 2. 如果路由信息未找到，与本地缓存中的路由信息进行对比，判断路由信息是否发生了变化，如果未发生变化，直接返回false
+     * 3. 更新MQClientInstance Broker地址缓存表
+     * 4. 根据topicRouteData中的List<QueueData>转换成topicPublishInfo的List<MessageQueue>列表。
+     *    其具体实现在topicRouteData2TopicPublishInfo，然后会更新MQClientInstance所管辖的所有消息发生关于topic的路由信息。
+     * @param topic
+     * @param isDefault
+     * @param defaultMQProducer
+     * @return
+     */
     public boolean updateTopicRouteInfoFromNameServer(final String topic, boolean isDefault,
         DefaultMQProducer defaultMQProducer) {
         try {
             if (this.lockNamesrv.tryLock(LOCK_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS)) {
                 try {
                     TopicRouteData topicRouteData;
+                    // 1. 查询路由信息
                     if (isDefault && defaultMQProducer != null) {
                         topicRouteData = this.mQClientAPIImpl.getDefaultTopicRouteInfoFromNameServer(defaultMQProducer.getCreateTopicKey(),
                             1000 * 3);
@@ -610,6 +624,7 @@ public class MQClientInstance {
                         topicRouteData = this.mQClientAPIImpl.getTopicRouteInfoFromNameServer(topic, 1000 * 3);
                     }
                     if (topicRouteData != null) {
+                        // 2. 判断路由信息是否发生变化
                         TopicRouteData old = this.topicRouteTable.get(topic);
                         boolean changed = topicRouteDataIsChange(old, topicRouteData);
                         if (!changed) {
@@ -624,7 +639,7 @@ public class MQClientInstance {
                             for (BrokerData bd : topicRouteData.getBrokerDatas()) {
                                 this.brokerAddrTable.put(bd.getBrokerName(), bd.getBrokerAddrs());
                             }
-
+                            // 3. 更新MQClientInstance Broker地址缓存表
                             // Update Pub info
                             {
                                 TopicPublishInfo publishInfo = topicRouteData2TopicPublishInfo(topic, topicRouteData);
