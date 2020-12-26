@@ -49,10 +49,25 @@ public class RouteInfoManager {
     private static final InternalLogger log = InternalLoggerFactory.getLogger(LoggerName.NAMESRV_LOGGER_NAME);
     private final static long BROKER_CHANNEL_EXPIRED_TIME = 1000 * 60 * 2;
     private final ReadWriteLock lock = new ReentrantReadWriteLock();
+    /**
+     * topic消息队列路由信息，消息发送时根据路由表进行负载均衡
+     */
     private final HashMap<String/* topic */, List<QueueData>> topicQueueTable;
+    /**
+     * broker基础信息，包含brokerName、所属集群名称、主备Broker地址
+     */
     private final HashMap<String/* brokerName */, BrokerData> brokerAddrTable;
+    /**
+     * broker集群信息，存储集群中所有broker名称
+     */
     private final HashMap<String/* clusterName */, Set<String/* brokerName */>> clusterAddrTable;
+    /**
+     * broker状态信息，NameServer每次收到心跳包时会替换该信息
+     */
     private final HashMap<String/* brokerAddr */, BrokerLiveInfo> brokerLiveTable;
+    /**
+     * broker上的FilterServer列表，用于类模式消息过滤
+     */
     private final HashMap<String/* brokerAddr */, List<String>/* Filter Server */> filterServerTable;
 
     public RouteInfoManager() {
@@ -99,6 +114,29 @@ public class RouteInfoManager {
         return topicList.encode();
     }
 
+    /**
+     * NameServer处理心跳包
+     * 1. 路由注册需要加写锁，防止并发修改RouteInfoManage中的路由表。
+     *    首先判断broker所属的集群是否存在，如果不存在，则创建，然后将broker加入到集群broker集合中。
+     * 2. 维护BrokerData信息，首先从brokerAddrTable根据brokerName尝试获取broker信息，
+     *    如果不存在，则新建BrokerData并放入brokerAddrTable，registerFirst设置为true；
+     *    如果存在，则进行替换
+     * 3. 如果Broker为Master，并且Broker Topic配置信息发生变化或者是初次注册，
+     *    则需要创建或更新Topic路由元数据，填充topicQueueTable，其实就是为默认主题自动注册路由信息。
+     *    当消息生产者发送主题时，如果该主题为创建并且BrokerConfig的autoCreateTopicEnable为true时，
+     *    返回MixAll.DEFAULT_TOPIC的路由信息
+     * 4. 更新BrokerLiveInfo，存活Broker信息表，BrokerLiveInfo是执行路由删除的重要依据
+     * 5. 注册Broker的过滤器Server地址列表，一个Broker会关联多个FilterServer消息过滤服务器
+     * @param clusterName
+     * @param brokerAddr
+     * @param brokerName
+     * @param brokerId
+     * @param haServerAddr
+     * @param topicConfigWrapper
+     * @param filterServerList
+     * @param channel
+     * @return
+     */
     public RegisterBrokerResult registerBroker(
         final String clusterName,
         final String brokerAddr,
@@ -111,6 +149,7 @@ public class RouteInfoManager {
         RegisterBrokerResult result = new RegisterBrokerResult();
         try {
             try {
+                // 1. 加写锁
                 this.lock.writeLock().lockInterruptibly();
 
                 Set<String> brokerNames = this.clusterAddrTable.get(clusterName);
@@ -121,7 +160,7 @@ public class RouteInfoManager {
                 brokerNames.add(brokerName);
 
                 boolean registerFirst = false;
-
+                // 2. 维护brokerData信息
                 BrokerData brokerData = this.brokerAddrTable.get(brokerName);
                 if (null == brokerData) {
                     registerFirst = true;
@@ -130,7 +169,7 @@ public class RouteInfoManager {
                 }
                 String oldAddr = brokerData.getBrokerAddrs().put(brokerId, brokerAddr);
                 registerFirst = registerFirst || (null == oldAddr);
-
+                // 3. 创建路由信息
                 if (null != topicConfigWrapper
                     && MixAll.MASTER_ID == brokerId) {
                     if (this.isBrokerTopicConfigChanged(brokerAddr, topicConfigWrapper.getDataVersion())
@@ -144,7 +183,7 @@ public class RouteInfoManager {
                         }
                     }
                 }
-
+                // 4. 更新BrokerLiveInfo
                 BrokerLiveInfo prevBrokerLiveInfo = this.brokerLiveTable.put(brokerAddr,
                     new BrokerLiveInfo(
                         System.currentTimeMillis(),
