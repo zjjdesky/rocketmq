@@ -534,7 +534,7 @@ public class DefaultMQProducerImpl implements MQProducerInner {
                             callTimeout = true;
                             break;
                         }
-
+                        // 消息发送
                         sendResult = this.sendKernelImpl(msg, mq, communicationMode, sendCallback, topicPublishInfo, timeout - costTime);
                         endTimestamp = System.currentTimeMillis();
                         this.updateFaultItem(mq.getBrokerName(), endTimestamp - beginTimestampPrev, false);
@@ -669,6 +669,28 @@ public class DefaultMQProducerImpl implements MQProducerInner {
         }
     }
 
+    /**
+     * 消息发送核心方法
+     * 1. 根据MessageQueue获取Broker的网络地址。
+     * 2. 为消息分配全局唯一id
+     *    如果消息体超过4k，会对消息体采用zip压缩，并设置消息的系统标记为MessageSysFlag.COMPRESSED_FLAG
+     *    如果是事务Prepared消息，则设置消息的系统标记为MessageSysFlag.TRANSACTION_PREPARED_TYPE
+     * 3. 如果注册了消息发送钩子函数，则执行消息发送前的增强逻辑。
+     *    通过DefaultMQProducerImpl#registerSendMessageHook注册钩子处理类
+     * 4. 构建消息发送请求包
+     * 5. 根据消息发送方式，同步、异步、单向方式进行网络传输
+     * @param msg 待发送消息
+     * @param mq 消息将发送到该消息队列上
+     * @param communicationMode 消息发送模式 SYNC、ASYNC、ONEWAY
+     * @param sendCallback 异步消息回调函数
+     * @param topicPublishInfo topic路由信息
+     * @param timeout 消息发送超时时间
+     * @return
+     * @throws MQClientException
+     * @throws RemotingException
+     * @throws MQBrokerException
+     * @throws InterruptedException
+     */
     private SendResult sendKernelImpl(final Message msg,
                                       final MessageQueue mq,
                                       final CommunicationMode communicationMode,
@@ -676,6 +698,7 @@ public class DefaultMQProducerImpl implements MQProducerInner {
                                       final TopicPublishInfo topicPublishInfo,
                                       final long timeout) throws MQClientException, RemotingException, MQBrokerException, InterruptedException {
         long beginStartTime = System.currentTimeMillis();
+        // 1. 获取broker网络地址
         String brokerAddr = this.mQClientFactory.findBrokerAddressInPublish(mq.getBrokerName());
         if (null == brokerAddr) {
             tryToFindTopicPublishInfo(mq.getTopic());
@@ -689,6 +712,7 @@ public class DefaultMQProducerImpl implements MQProducerInner {
             byte[] prevBody = msg.getBody();
             try {
                 //for MessageBatch,ID has been set in the generating process
+                // 2. 分配全局唯一id
                 if (!(msg instanceof MessageBatch)) {
                     MessageClientIDSetter.setUniqID(msg);
                 }
@@ -717,7 +741,7 @@ public class DefaultMQProducerImpl implements MQProducerInner {
                     this.executeCheckForbiddenHook(checkForbiddenContext);
                 }
 
-                if (this.hasSendMessageHook()) {
+                if (this.hasSendMessageHook()) { // 是否注册了发送消息的钩子函数
                     context = new SendMessageContext();
                     context.setProducer(this);
                     context.setProducerGroup(this.defaultMQProducer.getProducerGroup());
@@ -736,7 +760,7 @@ public class DefaultMQProducerImpl implements MQProducerInner {
                     }
                     this.executeSendMessageHookBefore(context);
                 }
-
+                // 4. 构建消息发送请求包
                 SendMessageRequestHeader requestHeader = new SendMessageRequestHeader();
                 requestHeader.setProducerGroup(this.defaultMQProducer.getProducerGroup());
                 requestHeader.setTopic(msg.getTopic());
@@ -763,7 +787,7 @@ public class DefaultMQProducerImpl implements MQProducerInner {
                         MessageAccessor.clearProperty(msg, MessageConst.PROPERTY_MAX_RECONSUME_TIMES);
                     }
                 }
-
+                // 5. 根据消息发送方式，同步、异步、单向方式进行网络传输
                 SendResult sendResult = null;
                 switch (communicationMode) {
                     case ASYNC:

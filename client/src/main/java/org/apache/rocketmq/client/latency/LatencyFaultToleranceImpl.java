@@ -97,8 +97,17 @@ public class LatencyFaultToleranceImpl implements LatencyFaultTolerance<String> 
     }
 
     class FaultItem implements Comparable<FaultItem> {
+        /**
+         * fault条目唯一键
+         */
         private final String name;
+        /**
+         * 本次消息发送延迟
+         */
         private volatile long currentLatency;
+        /**
+         * 规章规避开始时间
+         */
         private volatile long startTimestamp;
 
         public FaultItem(final String name) {
