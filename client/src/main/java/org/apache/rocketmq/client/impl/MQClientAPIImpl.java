@@ -280,7 +280,7 @@ public class MQClientAPIImpl {
 
         throw new MQClientException(response.getCode(), response.getRemark());
     }
-
+    //
     public SendResult sendMessage(
         final String addr,
         final String brokerName,
@@ -293,7 +293,7 @@ public class MQClientAPIImpl {
     ) throws RemotingException, MQBrokerException, InterruptedException {
         return sendMessage(addr, brokerName, msg, requestHeader, timeoutMillis, communicationMode, null, null, null, 0, context, producer);
     }
-
+    // 发送消息
     public SendResult sendMessage(
         final String addr,
         final String brokerName,
