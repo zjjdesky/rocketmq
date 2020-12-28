@@ -21,6 +21,9 @@ package org.apache.rocketmq.store;
  */
 public class AppendMessageResult {
     // Return code
+    /**
+     * 消息追加结果
+     */
     private AppendMessageStatus status;
     // Where to start writing
     private long wroteOffset;
