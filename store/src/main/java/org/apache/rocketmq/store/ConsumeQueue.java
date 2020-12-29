@@ -151,7 +151,16 @@ public class ConsumeQueue {
         }
     }
 
+    /**
+     * 根据消息存储时间来查找偏移量
+     * 1. 首先根据时间戳定位到物理文件
+     * 2. 采用二分法来加速检索
+     * 3. 计算偏移量
+     * @param timestamp
+     * @return
+     */
     public long getOffsetInQueueByTime(final long timestamp) {
+        // 1. 定位物理文件
         MappedFile mappedFile = this.mappedFileQueue.getMappedFileByTime(timestamp);
         if (mappedFile != null) {
             long offset = 0;
@@ -165,6 +174,7 @@ public class ConsumeQueue {
                 ByteBuffer byteBuffer = sbr.getByteBuffer();
                 high = byteBuffer.limit() - CQ_STORE_UNIT_SIZE;
                 try {
+                    // 2. 二分法加速检索
                     while (high >= low) {
                         midOffset = (low + high) / (2 * CQ_STORE_UNIT_SIZE) * CQ_STORE_UNIT_SIZE;
                         byteBuffer.position(midOffset);
@@ -193,7 +203,7 @@ public class ConsumeQueue {
                             leftIndexValue = storeTime;
                         }
                     }
-
+                    // 3. 计算偏移量
                     if (targetOffset != -1) {
 
                         offset = targetOffset;
@@ -484,6 +494,7 @@ public class ConsumeQueue {
 
     public SelectMappedBufferResult getIndexBuffer(final long startIndex) {
         int mappedFileSize = this.mappedFileSize;
+        // 获取物理偏移量
         long offset = startIndex * CQ_STORE_UNIT_SIZE;
         if (offset >= this.getMinLogicOffset()) {
             MappedFile mappedFile = this.mappedFileQueue.findMappedFileByOffset(offset);
@@ -492,6 +503,7 @@ public class ConsumeQueue {
                 return result;
             }
         }
+        // offset < this.getMinLogicOffset() 表示该消息已经被删除
         return null;
     }
 

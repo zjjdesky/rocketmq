@@ -170,9 +170,9 @@ public class IndexService {
                         indexLastUpdateTimestamp = f.getEndTimestamp();
                         indexLastUpdatePhyoffset = f.getEndPhyOffset();
                     }
-
+                    // 时间段匹配成功
                     if (f.isTimeMatched(begin, end)) {
-
+                        // 消息查询
                         f.selectPhyOffset(phyOffsets, buildKey(topic, key), maxNum, begin, end, lastFile);
                     }
 
@@ -198,7 +198,19 @@ public class IndexService {
         return topic + "#" + key;
     }
 
+    /**
+     * 构建索引
+     *
+     * 1. 首先会获取一个indexFile文件，然后判断当前请求是否需要创建索引。
+     * 2. 如果需要创建索引，则又分为两种形式的索引
+     *    一种是通过请求设置的唯一键创建索引；
+     *    另一种则是通过主键keys创建索引。
+     *    后续如果使用唯一键或者主键keys来查询对应的消息，则可以通过创建的索引文件查询。
+     *    其实，对于使用唯一键或者主键keys来创建索引并没有区别，都是调用putKey来创建索引。
+     * @param req
+     */
     public void buildIndex(DispatchRequest req) {
+        // 获取indexFile
         IndexFile indexFile = retryGetAndCreateIndexFile();
         if (indexFile != null) {
             long endPhyOffset = indexFile.getEndPhyOffset();
@@ -206,6 +218,7 @@ public class IndexService {
             String topic = msg.getTopic();
             String keys = msg.getKeys();
             if (msg.getCommitLogOffset() < endPhyOffset) {
+                // 如果已经建立索引的偏移量大于当前请求要创建的偏移量，直接返回，说明当前请求的索引已经创建过
                 return;
             }
 
@@ -218,7 +231,7 @@ public class IndexService {
                 case MessageSysFlag.TRANSACTION_ROLLBACK_TYPE:
                     return;
             }
-
+            // 用uniqKey创建索引
             if (req.getUniqKey() != null) {
                 indexFile = putKey(indexFile, msg, buildKey(topic, req.getUniqKey()));
                 if (indexFile == null) {
@@ -226,7 +239,7 @@ public class IndexService {
                     return;
                 }
             }
-
+            // 通过主键keys创建索引
             if (keys != null && keys.length() > 0) {
                 String[] keyset = keys.split(MessageConst.KEY_SEPARATOR);
                 for (int i = 0; i < keyset.length; i++) {
