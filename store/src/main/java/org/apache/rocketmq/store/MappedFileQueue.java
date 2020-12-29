@@ -29,21 +29,41 @@ import org.apache.rocketmq.common.constant.LoggerName;
 import org.apache.rocketmq.logging.InternalLogger;
 import org.apache.rocketmq.logging.InternalLoggerFactory;
 
+/**
+ * MappedFileQueue是MappedFile的管理容器
+ * MappedFileQueue是对存储目录的封装
+ */
 public class MappedFileQueue {
     private static final InternalLogger log = InternalLoggerFactory.getLogger(LoggerName.STORE_LOGGER_NAME);
     private static final InternalLogger LOG_ERROR = InternalLoggerFactory.getLogger(LoggerName.STORE_ERROR_LOGGER_NAME);
 
     private static final int DELETE_FILES_BATCH_MAX = 10;
 
+    /**
+     * 存储目录
+     */
     private final String storePath;
-
+    /**
+     * 单个文件的存储大小
+     */
     private final int mappedFileSize;
-
+    /**
+     * mappedFile文件集合
+     */
     private final CopyOnWriteArrayList<MappedFile> mappedFiles = new CopyOnWriteArrayList<MappedFile>();
-
+    /**
+     * 创建MappedFile服务
+     */
     private final AllocateMappedFileService allocateMappedFileService;
-
+    /**
+     * 当前刷盘指针
+     * 表示该指针之前的所有数据全部持久化到磁盘
+     */
     private long flushedWhere = 0;
+    /**
+     * 当前数据提交指针
+     * 内存中ByteBuffer当前的写指针，该值大于等于flushedWhere
+     */
     private long committedWhere = 0;
 
     private volatile long storeTimestamp = 0;
@@ -74,6 +94,11 @@ public class MappedFileQueue {
         }
     }
 
+    /**
+     * 根据消息存储时间戳来查找MapperFile
+     * @param timestamp
+     * @return
+     */
     public MappedFile getMappedFileByTime(final long timestamp) {
         Object[] mfs = this.copyMappedFiles(0);
 
@@ -285,6 +310,10 @@ public class MappedFileQueue {
         return true;
     }
 
+    /**
+     * 获取存储文件的最小偏移量
+     * @return
+     */
     public long getMinOffset() {
 
         if (!this.mappedFiles.isEmpty()) {
@@ -299,6 +328,11 @@ public class MappedFileQueue {
         return -1;
     }
 
+    /**
+     * 获取存储文件的最大偏移量
+     *
+     * @return
+     */
     public long getMaxOffset() {
         MappedFile mappedFile = getLastMappedFile();
         if (mappedFile != null) {
@@ -307,6 +341,11 @@ public class MappedFileQueue {
         return 0;
     }
 
+    /**
+     * 获取存储文件当前的写指针
+     *
+     * @return
+     */
     public long getMaxWrotePosition() {
         MappedFile mappedFile = getLastMappedFile();
         if (mappedFile != null) {
@@ -453,6 +492,8 @@ public class MappedFileQueue {
     }
 
     /**
+     * 根据消息偏移量offset查找MappedFile
+     *
      * Finds a mapped file by offset.
      *
      * @param offset Offset.
@@ -464,6 +505,8 @@ public class MappedFileQueue {
             MappedFile firstMappedFile = this.getFirstMappedFile();
             MappedFile lastMappedFile = this.getLastMappedFile();
             if (firstMappedFile != null && lastMappedFile != null) {
+                // 处理不合理的offset的情况
+                // rocketMq采取定时删除存储文件的策略，也就是说，第一个文件不一定是00000000000，因为文件会在某一刻会被删除
                 if (offset < firstMappedFile.getFileFromOffset() || offset >= lastMappedFile.getFileFromOffset() + this.mappedFileSize) {
                     LOG_ERROR.warn("Offset not matched. Request offset: {}, firstOffset: {}, lastOffset: {}, mappedFileSize: {}, mappedFiles count: {}",
                         offset,
@@ -472,6 +515,7 @@ public class MappedFileQueue {
                         this.mappedFileSize,
                         this.mappedFiles.size());
                 } else {
+                    // 获取文件的位置
                     int index = (int) ((offset / this.mappedFileSize) - (firstMappedFile.getFileFromOffset() / this.mappedFileSize));
                     MappedFile targetFile = null;
                     try {
