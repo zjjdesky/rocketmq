@@ -1342,6 +1342,7 @@ public class DefaultMessageStore implements MessageStore {
             // 正常停止文件恢复
             this.commitLog.recoverNormally();
         } else {
+            // 非正常停止的文件恢复
             this.commitLog.recoverAbnormally();
         }
 

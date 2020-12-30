@@ -157,8 +157,18 @@ public class CommitLog {
 
     /**
      * When the normal exit, data recovery, all memory data have been flush
+     * 正常文件恢复
+     * myq: 为什么会有步骤1？按道理正常停止的时候 应该检查两个文件就够了吧？？？
+     * 1. broker正常停止再重启时，从倒数第三个文件开始进行恢复，如果不足三个，则从第一个文件开始恢复。
+     * 2. 遍历commitlog文件，每次取出一条消息，如果查到结果为true并且消息的长度大于0表示消息正确，mappedFileOffset指针向前移动本条消息长度；
+     *    如果查找消息结果为true并且消息长度等于0，表示已到文件末尾；
+     *    如果还有下一个文件，则重置processOffset、mappedFileOffset，重复步骤2，否则跳出循环；
+     *    如果查找结果为false，表明该文件未填满所有消息，跳出循环，结束遍历文件
+     * 3. 更新MappedFileQueue的flushedWhere与committedWhere指针
+     * 4. 删除offset之后的所有文件
      */
     public void recoverNormally() {
+        // 在进行文件恢复时查找消息时是否验证CRC
         boolean checkCRCOnRecover = this.defaultMessageStore.getMessageStoreConfig().isCheckCRCOnRecover();
         final List<MappedFile> mappedFiles = this.mappedFileQueue.getMappedFiles();
         if (!mappedFiles.isEmpty()) {
@@ -169,7 +179,9 @@ public class CommitLog {
 
             MappedFile mappedFile = mappedFiles.get(index);
             ByteBuffer byteBuffer = mappedFile.sliceByteBuffer();
+            // commitlog文件已确认的物理偏移量
             long processOffset = mappedFile.getFileFromOffset();
+            // 当前文件已经校验通过的offset
             long mappedFileOffset = 0;
             while (true) {
                 DispatchRequest dispatchRequest = this.checkMessageAndReturnSize(byteBuffer, checkCRCOnRecover);
@@ -390,6 +402,11 @@ public class CommitLog {
         this.confirmOffset = phyOffset;
     }
 
+    /**
+     * broker异常停止文件恢复
+     * 1. 正常停止默认从倒数第三个文件开始进行恢复，而异常停止则需要从最后一个文件往前走，找到第一个消息存储正常的文件。
+     *    其次，如果commitlog目录没有消息文件，如果在消息消费队列下存在文件，则需要销毁。
+     */
     public void recoverAbnormally() {
         // recover by the minimum time stamp
         boolean checkCRCOnRecover = this.defaultMessageStore.getMessageStoreConfig().isCheckCRCOnRecover();
@@ -471,14 +488,24 @@ public class CommitLog {
         }
     }
 
+    /**
+     * 1. 首先判断文件的魔数，如果不是MESSAGE_MAGIC_CODE，返回false。表示该文件不符合commitlog消息文件的存储格式
+     * 2. 如果文件中第一条信息的存储时间为0，返回false。说明该消息存储文件中未存储任何消息。
+     * 3. 对比文件的第一条消息的时间戳与检测点
+     *    文件第一条消息的时间戳不小于文件检测点说明该文件部分消息是可靠的，则从文件开始恢复。
+     *    文件监测点保存了commitlog文件、消息队列（consumerQueue）、索引文件（indexFile）的刷盘点
+     *    rocketmq默认选择
+     * @param mappedFile
+     * @return
+     */
     private boolean isMappedFileMatchedRecover(final MappedFile mappedFile) {
         ByteBuffer byteBuffer = mappedFile.sliceByteBuffer();
-
+        // 1. 判断文件魔数
         int magicCode = byteBuffer.getInt(MessageDecoder.MESSAGE_MAGIC_CODE_POSTION);
         if (magicCode != MESSAGE_MAGIC_CODE) {
             return false;
         }
-
+        // 2. 对比文件时间戳
         long storeTimestamp = byteBuffer.getLong(MessageDecoder.MESSAGE_STORE_TIMESTAMP_POSTION);
         if (0 == storeTimestamp) {
             return false;
@@ -631,6 +658,13 @@ public class CommitLog {
         return putMessageResult;
     }
 
+    /**
+     * 刷盘
+     *
+     * @param result
+     * @param putMessageResult
+     * @param messageExt
+     */
     public void handleDiskFlush(AppendMessageResult result, PutMessageResult putMessageResult, MessageExt messageExt) {
         // Synchronization flush
         if (FlushDiskType.SYNC_FLUSH == this.defaultMessageStore.getMessageStoreConfig().getFlushDiskType()) {
@@ -1036,8 +1070,17 @@ public class CommitLog {
     }
 
     public static class GroupCommitRequest {
+        /**
+         * 刷盘点偏移量
+         */
         private final long nextOffset;
+        /**
+         * 倒计数锁存器
+         */
         private final CountDownLatch countDownLatch = new CountDownLatch(1);
+        /**
+         * 刷盘结果
+         */
         private volatile boolean flushOK = false;
 
         public GroupCommitRequest(long nextOffset) {

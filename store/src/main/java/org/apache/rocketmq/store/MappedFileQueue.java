@@ -126,6 +126,12 @@ public class MappedFileQueue {
         return mfs;
     }
 
+    /**
+     * truncate v. 截短
+     *
+     * 删除offset之后的所有文件
+     * @param offset
+     */
     public void truncateDirtyFiles(long offset) {
         List<MappedFile> willRemoveFiles = new ArrayList<MappedFile>();
 

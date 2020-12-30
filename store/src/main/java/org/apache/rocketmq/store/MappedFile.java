@@ -477,6 +477,12 @@ public class MappedFile extends ReferenceResource {
         return true;
     }
 
+    /**
+     * interval n. 间隔
+     * forcibly adv. 强制
+     * @param intervalForcibly
+     * @return
+     */
     public boolean destroy(final long intervalForcibly) {
         this.shutdown(intervalForcibly);
 
