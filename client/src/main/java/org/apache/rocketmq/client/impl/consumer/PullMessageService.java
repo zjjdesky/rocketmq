@@ -92,7 +92,9 @@ public class PullMessageService extends ServiceThread {
 
         while (!this.isStopped()) {
             try {
+                // 获取一个PullRequest消息拉取任务，如果pullRequestQueue为空，则线程将阻塞，直到拉取任务被放入
                 PullRequest pullRequest = this.pullRequestQueue.take();
+                // 消息拉取
                 this.pullMessage(pullRequest);
             } catch (InterruptedException ignored) {
             } catch (Exception e) {

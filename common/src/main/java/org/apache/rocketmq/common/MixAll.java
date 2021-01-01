@@ -103,6 +103,12 @@ public class MixAll {
         return wsAddr;
     }
 
+    /**
+     * 消息重试主题命名
+     *
+     * @param consumerGroup
+     * @return %RETRY%+消费者组名
+     */
     public static String getRetryTopic(final String consumerGroup) {
         return RETRY_GROUP_TOPIC_PREFIX + consumerGroup;
     }
