@@ -43,6 +43,12 @@ public class PullMessageService extends ServiceThread {
         this.mQClientFactory = mQClientFactory;
     }
 
+    /**
+     * 添加PullRequest
+     * PullRequestService提供延迟添加与立即添加两种方式，将PullRequest放入到pullRequestQueue中
+     * @param pullRequest
+     * @param timeDelay
+     */
     public void executePullRequestLater(final PullRequest pullRequest, final long timeDelay) {
         if (!isStopped()) {
             this.scheduledExecutorService.schedule(new Runnable() {
@@ -56,6 +62,10 @@ public class PullMessageService extends ServiceThread {
         }
     }
 
+    /**
+     * immediately adv. 立即；接近；直接的；紧接的 conj. 即刻
+     * @param pullRequest
+     */
     public void executePullRequestImmediately(final PullRequest pullRequest) {
         try {
             this.pullRequestQueue.put(pullRequest);
@@ -76,9 +86,16 @@ public class PullMessageService extends ServiceThread {
         return scheduledExecutorService;
     }
 
+    /**
+     * 拉取消息
+     * @param pullRequest
+     */
     private void pullMessage(final PullRequest pullRequest) {
+        // 根据消费者组名从MQClientInstance获取消费者内部实现类MQConsumerInner
         final MQConsumerInner consumer = this.mQClientFactory.selectConsumer(pullRequest.getConsumerGroup());
         if (consumer != null) {
+            // PullMessageService该线程只为PUSH模式服务
+            // myq: 为什么这里要强转成DefaultMQPushConsumerImpl？
             DefaultMQPushConsumerImpl impl = (DefaultMQPushConsumerImpl) consumer;
             impl.pullMessage(pullRequest);
         } else {

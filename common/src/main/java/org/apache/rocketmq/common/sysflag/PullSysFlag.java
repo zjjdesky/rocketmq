@@ -17,9 +17,21 @@
 package org.apache.rocketmq.common.sysflag;
 
 public class PullSysFlag {
+    /**
+     * 表示从内存中读取的消费进度大于0，则设置该标记位
+     */
     private final static int FLAG_COMMIT_OFFSET = 0x1 << 0;
+    /**
+     * 表示消息拉取时支持挂起
+     */
     private final static int FLAG_SUSPEND = 0x1 << 1;
+    /**
+     * 消息过滤机制为表达式，则设置该标记位
+     */
     private final static int FLAG_SUBSCRIPTION = 0x1 << 2;
+    /**
+     * 消息过滤机制为类过滤模式
+     */
     private final static int FLAG_CLASS_FILTER = 0x1 << 3;
 
     public static int buildSysFlag(final boolean commitOffset, final boolean suspend,
