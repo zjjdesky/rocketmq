@@ -39,6 +39,9 @@ public class FilterServerManager {
 
     public static final long FILTER_SERVER_MAX_IDLE_TIME_MILLS = 30000;
     private static final InternalLogger log = InternalLoggerFactory.getLogger(LoggerName.BROKER_LOGGER_NAME);
+    /**
+     *
+     */
     private final ConcurrentMap<Channel, FilterServerInfo> filterServerTable =
         new ConcurrentHashMap<Channel, FilterServerInfo>(16);
     private final BrokerController brokerController;
@@ -51,7 +54,9 @@ public class FilterServerManager {
     }
 
     public void start() {
-
+        // broker为了避免broker端FilterServer的异常退出导致FilterServer进程越来越少
+        // 提供一个定时任务每30s检测一下当前存活的FilterServer进程个数
+        // 如果当前存活的FilterServer进程个数小于配置的数量，则自动创建一个FilterServer进程
         this.scheduledExecutorService.scheduleAtFixedRate(new Runnable() {
             @Override
             public void run() {
@@ -64,7 +69,11 @@ public class FilterServerManager {
         }, 1000 * 5, 1000 * 30, TimeUnit.MILLISECONDS);
     }
 
+    /**
+     * 创建FilterServer
+     */
     public void createFilterServer() {
+        // 如果当前存活的FilterServer进程个数小于配置的数量，则自动创建一个FilterServer进程
         int more =
             this.brokerController.getBrokerConfig().getFilterServerNums() - this.filterServerTable.size();
         String cmd = this.buildStartCommand();
@@ -98,6 +107,12 @@ public class FilterServerManager {
         this.scheduledExecutorService.shutdown();
     }
 
+    /**
+     * 注册FilterServer
+     *
+     * @param channel
+     * @param filterServerAddr
+     */
     public void registerFilterServer(final Channel channel, final String filterServerAddr) {
         FilterServerInfo filterServerInfo = this.filterServerTable.get(channel);
         if (filterServerInfo != null) {
@@ -145,7 +160,13 @@ public class FilterServerManager {
     }
 
     static class FilterServerInfo {
+        /**
+         * filterServer服务器地址
+         */
         private String filterServerAddr;
+        /**
+         * filterServer上次发送心跳包的时间
+         */
         private long lastUpdateTimestamp;
 
         public String getFilterServerAddr() {

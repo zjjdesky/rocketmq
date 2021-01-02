@@ -887,6 +887,12 @@ public class DefaultMQPushConsumerImpl implements MQConsumerInner {
         return this.rebalanceImpl.getSubscriptionInner();
     }
 
+    /**
+     * 基于表达式的消息订阅
+     * @param topic
+     * @param subExpression
+     * @throws MQClientException
+     */
     public void subscribe(String topic, String subExpression) throws MQClientException {
         try {
             SubscriptionData subscriptionData = FilterAPI.buildSubscriptionData(this.defaultMQPushConsumer.getConsumerGroup(),
@@ -900,8 +906,21 @@ public class DefaultMQPushConsumerImpl implements MQConsumerInner {
         }
     }
 
+    /**
+     * 基于类模式的消息订阅
+     *
+     * 1. 构建订阅信息，然后将该订阅信息添加到RebalanceImpl中，其主要目标是
+     *    Rebalance会对订阅信息表中的主题进行消息队列负载，创建消息拉取任务，
+     *    以便PullMessageService线程拉取消息
+     * 2. 发送心跳给所有broker并上传过滤源码
+     * @param topic
+     * @param fullClassName
+     * @param filterClassSource
+     * @throws MQClientException
+     */
     public void subscribe(String topic, String fullClassName, String filterClassSource) throws MQClientException {
         try {
+            // 1. 构建订阅信息
             SubscriptionData subscriptionData = FilterAPI.buildSubscriptionData(this.defaultMQPushConsumer.getConsumerGroup(),
                 topic, "*");
             subscriptionData.setSubString(fullClassName);
@@ -909,6 +928,7 @@ public class DefaultMQPushConsumerImpl implements MQConsumerInner {
             subscriptionData.setFilterClassSource(filterClassSource);
             this.rebalanceImpl.getSubscriptionInner().put(topic, subscriptionData);
             if (this.mQClientFactory != null) {
+                // 2. 发送心跳给所有broker并上传过滤源码
                 this.mQClientFactory.sendHeartbeatToAllBrokerWithLock();
             }
 

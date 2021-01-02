@@ -258,6 +258,7 @@ public class PullAPIWrapper {
         ConcurrentMap<String, TopicRouteData> topicRouteTable = this.mQClientFactory.getTopicRouteTable();
         if (topicRouteTable != null) {
             TopicRouteData topicRouteData = topicRouteTable.get(topic);
+            // 获取FilterServer列表
             List<String> list = topicRouteData.getFilterServerTable().get(brokerAddr);
 
             if (list != null && !list.isEmpty()) {

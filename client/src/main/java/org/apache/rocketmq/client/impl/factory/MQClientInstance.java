@@ -455,7 +455,9 @@ public class MQClientInstance {
     public void sendHeartbeatToAllBrokerWithLock() {
         if (this.lockHeartbeat.tryLock()) {
             try {
+                // 发送心跳
                 this.sendHeartbeatToAllBroker();
+                // 将消息端订阅信息中的类过滤模式的过滤类源码上传到FilterServer
                 this.uploadFilterClassSource();
             } catch (final Exception e) {
                 log.error("sendHeartbeatToAllBroker exception", e);
@@ -580,6 +582,7 @@ public class MQClientInstance {
                         final String topic = sub.getTopic();
                         final String filterClassSource = sub.getFilterClassSource();
                         try {
+                            // 上传过滤类源码
                             this.uploadFilterClassToAllFilterServer(consumerGroup, className, topic, filterClassSource);
                         } catch (Exception e) {
                             log.error("uploadFilterClassToAllFilterServer Exception", e);
@@ -755,10 +758,12 @@ public class MQClientInstance {
                 RemotingHelper.exceptionSimpleDesc(e1));
         }
 
+        // FilterServer是依附于Broker消息服务器的，多个FilterServer共同从Broker上拉取消息
         TopicRouteData topicRouteData = this.topicRouteTable.get(topic);
         if (topicRouteData != null
             && topicRouteData.getFilterServerTable() != null && !topicRouteData.getFilterServerTable().isEmpty()) {
             Iterator<Entry<String, List<String>>> it = topicRouteData.getFilterServerTable().entrySet().iterator();
+            // 遍历主题路由表中的filterServer，向缓存中所有的FilterServer上传消息过滤代码
             while (it.hasNext()) {
                 Entry<String, List<String>> next = it.next();
                 List<String> value = next.getValue();
