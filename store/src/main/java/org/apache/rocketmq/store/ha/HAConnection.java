@@ -28,15 +28,32 @@ import org.apache.rocketmq.logging.InternalLoggerFactory;
 import org.apache.rocketmq.remoting.common.RemotingUtil;
 import org.apache.rocketmq.store.SelectMappedBufferResult;
 
+/**
+ * ha master服务端连接ha对象的封装
+ */
 public class HAConnection {
     private static final InternalLogger log = InternalLoggerFactory.getLogger(LoggerName.STORE_LOGGER_NAME);
     private final HAService haService;
     private final SocketChannel socketChannel;
+    /**
+     * 客户端连接地址
+     */
     private final String clientAddr;
+    /**
+     * 服务端向服务器写数据
+     */
     private WriteSocketService writeSocketService;
+    /**
+     * 服务端从服务器读数据
+     */
     private ReadSocketService readSocketService;
-
+    /**
+     * 从服务器请求拉取数据的偏移量
+     */
     private volatile long slaveRequestOffset = -1;
+    /**
+     * 从服务器反馈已拉取完成的数据偏移量
+     */
     private volatile long slaveAckOffset = -1;
 
     public HAConnection(final HAService haService, final SocketChannel socketChannel) throws IOException {
@@ -78,12 +95,24 @@ public class HAConnection {
         return socketChannel;
     }
 
+    /**
+     * ha master网络读实现类
+     */
     class ReadSocketService extends ServiceThread {
+        /**
+         * 网络读缓冲区大小 1M
+         */
         private static final int READ_MAX_BUFFER_SIZE = 1024 * 1024;
         private final Selector selector;
         private final SocketChannel socketChannel;
         private final ByteBuffer byteBufferRead = ByteBuffer.allocate(READ_MAX_BUFFER_SIZE);
+        /**
+         * byteBuffer当前处理指针
+         */
         private int processPostion = 0;
+        /**
+         * 上次读取数据的时间戳
+         */
         private volatile long lastReadTimestamp = System.currentTimeMillis();
 
         public ReadSocketService(final SocketChannel socketChannel) throws IOException {
@@ -93,6 +122,10 @@ public class HAConnection {
             this.thread.setDaemon(true);
         }
 
+        /**
+         * 每隔1s处理一次读就绪时间
+         * 每次请求调用其processReadEvent来解析从服务器拉取的请求
+         */
         @Override
         public void run() {
             HAConnection.log.info(this.getServiceName() + " service started");
@@ -190,15 +223,32 @@ public class HAConnection {
         }
     }
 
+    /**
+     * ha master网络写实现类
+     */
     class WriteSocketService extends ServiceThread {
         private final Selector selector;
         private final SocketChannel socketChannel;
-
+        /**
+         * 消息头长度
+         */
         private final int headerSize = 8 + 4;
         private final ByteBuffer byteBufferHeader = ByteBuffer.allocate(headerSize);
+        /**
+         * 下一次传输的物理偏移量
+         */
         private long nextTransferFromWhere = -1;
+        /**
+         * 根据偏移量查找消息结果
+         */
         private SelectMappedBufferResult selectMappedBufferResult;
+        /**
+         * 上一次数据是否传输完毕
+         */
         private boolean lastWriteOver = true;
+        /**
+         * 上一次写入的时间戳
+         */
         private long lastWriteTimestamp = System.currentTimeMillis();
 
         public WriteSocketService(final SocketChannel socketChannel) throws IOException {
@@ -216,13 +266,14 @@ public class HAConnection {
                 try {
                     this.selector.select(1000);
 
-                    if (-1 == HAConnection.this.slaveRequestOffset) {
+                    if (-1 == HAConnection.this.slaveRequestOffset) { // 说明master还未收到从salve的拉取请求，放弃本次事件处理，slaveRequestOffset在收到从服务器拉取请求时更新
                         Thread.sleep(10);
                         continue;
                     }
 
-                    if (-1 == this.nextTransferFromWhere) {
+                    if (-1 == this.nextTransferFromWhere) { // 表示初次进行数据传输，计算待传输的物理偏移量
                         if (0 == HAConnection.this.slaveRequestOffset) {
+                            // 从当前commitlog文件最大偏移量开始传输
                             long masterOffset = HAConnection.this.haService.getDefaultMessageStore().getCommitLog().getMaxOffset();
                             masterOffset =
                                 masterOffset
@@ -235,6 +286,7 @@ public class HAConnection {
 
                             this.nextTransferFromWhere = masterOffset;
                         } else {
+                            // 根据从服务器的拉取请求的偏移量开始传输
                             this.nextTransferFromWhere = HAConnection.this.slaveRequestOffset;
                         }
 
@@ -242,11 +294,11 @@ public class HAConnection {
                             + "], and slave request " + HAConnection.this.slaveRequestOffset);
                     }
 
-                    if (this.lastWriteOver) {
+                    if (this.lastWriteOver) { // 上次写事件已经将信息全部写入客户端
 
                         long interval =
                             HAConnection.this.haService.getDefaultMessageStore().getSystemClock().now() - this.lastWriteTimestamp;
-
+                        // 心跳间隔大于HA心跳检测事件，则发送一个心跳包
                         if (interval > HAConnection.this.haService.getDefaultMessageStore().getMessageStoreConfig()
                             .getHaSendHeartbeatInterval()) {
 
@@ -256,17 +308,17 @@ public class HAConnection {
                             this.byteBufferHeader.putLong(this.nextTransferFromWhere);
                             this.byteBufferHeader.putInt(0);
                             this.byteBufferHeader.flip();
-
+                            // 发送心跳包，避免长连接由于空闲被关闭
                             this.lastWriteOver = this.transferData();
                             if (!this.lastWriteOver)
                                 continue;
                         }
-                    } else {
+                    } else { // 上次数据未写完，则先传输上一次的数据
                         this.lastWriteOver = this.transferData();
-                        if (!this.lastWriteOver)
+                        if (!this.lastWriteOver) // 消息还是未全部传输，则结束这次事件处理
                             continue;
                     }
-
+                    // 消息传输到slave服务器
                     SelectMappedBufferResult selectResult =
                         HAConnection.this.haService.getDefaultMessageStore().getCommitLogData(this.nextTransferFromWhere);
                     if (selectResult != null) {

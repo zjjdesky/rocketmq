@@ -641,10 +641,16 @@ public class DefaultMessageStore implements MessageStore {
                         }
 
                         nextBeginOffset = offset + (i / ConsumeQueue.CQ_STORE_UNIT_SIZE);
-
+                        /**
+                         * maxOffsetPy 代表当前主服务器消息存储文件最大偏移量
+                         * maxPhyOffsetPulling 此次拉取消息最大偏移量
+                         * 对于PullMessageService线程来说，当前未被拉取到消息消费端的消息长度
+                         */
                         long diff = maxOffsetPy - maxPhyOffsetPulling;
                         long memory = (long) (StoreUtil.TOTAL_PHYSICAL_MEMORY_SIZE
                             * (this.messageStoreConfig.getAccessMessageInMemoryMaxRatio() / 100.0));
+                        // 如果diff>memory 表示当前需要拉取的消息已经超过了常驻内存的大小
+                        // 表示主服务繁忙，此时建议从从服务器拉取
                         getResult.setSuggestPullingFromSlave(diff > memory);
                     } finally {
 

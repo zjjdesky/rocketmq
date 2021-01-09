@@ -240,6 +240,11 @@ public class PullAPIWrapper {
         );
     }
 
+    /**
+     * 根据消费队列获取brokerId
+     * @param mq
+     * @return
+     */
     public long recalculatePullFromWhichNode(final MessageQueue mq) {
         if (this.isConnectBrokerByUser()) {
             return this.defaultBrokerId;

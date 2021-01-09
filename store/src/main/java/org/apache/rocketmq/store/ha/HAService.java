@@ -40,6 +40,14 @@ import org.apache.rocketmq.remoting.common.RemotingUtil;
 import org.apache.rocketmq.store.CommitLog;
 import org.apache.rocketmq.store.DefaultMessageStore;
 
+/**
+ * RocketMQ主从同步核心类
+ * HA实现原理：
+ * 1. 主服务器启动，并在特定端口上监听从服务器的连接
+ * 2. 从服务器主动连接主服务器，主服务器接收客户端的连接，并建立相关TCP连接
+ * 3. 从服务器主动向主服务器发送待拉取消息偏移量，主服务器解析请求并返回消息给从服务器
+ * 4. 从服务器保存消息并继续发送新的消息同步请求
+ */
 public class HAService {
     private static final InternalLogger log = InternalLoggerFactory.getLogger(LoggerName.STORE_LOGGER_NAME);
 
@@ -155,10 +163,14 @@ public class HAService {
 
     /**
      * Listens to slave connections to create {@link HAConnection}.
+     * 主要作用是ha master端监听slave连接
      */
     class AcceptSocketService extends ServiceThread {
+        // broker服务监听套接字（本地ip+端口号）
         private final SocketAddress socketAddressListen;
+        // 服务端ServerSocketChannel
         private ServerSocketChannel serverSocketChannel;
+        // 基于NIO的事件选择器
         private Selector selector;
 
         public AcceptSocketService(final int port) {
@@ -171,7 +183,9 @@ public class HAService {
          * @throws Exception If fails.
          */
         public void beginAccept() throws Exception {
+            // 创建ServerSocketChannel
             this.serverSocketChannel = ServerSocketChannel.open();
+            // 创建Selector
             this.selector = RemotingUtil.openSelector();
             this.serverSocketChannel.socket().setReuseAddress(true);
             this.serverSocketChannel.socket().bind(this.socketAddressListen);
@@ -195,6 +209,8 @@ public class HAService {
 
         /**
          * {@inheritDoc}
+         * 1. Selector选择器每1s处理一次连接就绪事件
+         * 2. 为每个连接创建一个HAConnection对象，该HAConnection将负责M-S数据同步逻辑
          */
         @Override
         public void run() {
@@ -215,6 +231,7 @@ public class HAService {
                                         + sc.socket().getRemoteSocketAddress());
 
                                     try {
+                                        // 为每个连接创建一个HAConnection对象，该HAConnection将负责M-S数据同步逻辑
                                         HAConnection conn = new HAConnection(HAService.this, sc);
                                         conn.start();
                                         HAService.this.addConnection(conn);
@@ -249,6 +266,8 @@ public class HAService {
 
     /**
      * GroupTransferService Service
+     * 主从同步通知
+     * GroupTransferService主从同步阻塞实现
      */
     class GroupTransferService extends ServiceThread {
 
@@ -323,17 +342,50 @@ public class HAService {
         }
     }
 
+    /**
+     * ha client端
+     * HAClient是主从同步Slave端的核心实现类
+     */
     class HAClient extends ServiceThread {
+        /**
+         * Socket读缓冲区大小
+         */
         private static final int READ_MAX_BUFFER_SIZE = 1024 * 1024 * 4;
+        /**
+         * master地址
+         */
         private final AtomicReference<String> masterAddress = new AtomicReference<>();
+        /**
+         * Slave向Master发起主从同步的拉取偏移量
+         */
         private final ByteBuffer reportOffset = ByteBuffer.allocate(8);
+        /**
+         * 网络传输通道
+         */
         private SocketChannel socketChannel;
+        /**
+         * NIO事件选择器
+         */
         private Selector selector;
+        /**
+         * 上一次写入时间戳
+         */
         private long lastWriteTimestamp = System.currentTimeMillis();
-
+        /**
+         * 反馈Slave当前的复制进度，commitlog文件最大偏移量
+         */
         private long currentReportedOffset = 0;
+        /**
+         * 本次已处理读缓存的指针
+         */
         private int dispatchPostion = 0;
+        /**
+         * 读缓冲区 4M
+         */
         private ByteBuffer byteBufferRead = ByteBuffer.allocate(READ_MAX_BUFFER_SIZE);
+        /**
+         * 读缓冲区备份，与byteBufferRead进行交换
+         */
         private ByteBuffer byteBufferBackup = ByteBuffer.allocate(READ_MAX_BUFFER_SIZE);
 
         public HAClient() throws IOException {
@@ -348,6 +400,10 @@ public class HAService {
             }
         }
 
+        /**
+         * 判断是否需要向Master反馈当前待拉取偏移量
+         * @return
+         */
         private boolean isTimeToReportOffset() {
             long interval =
                 HAService.this.defaultMessageStore.getSystemClock().now() - this.lastWriteTimestamp;
@@ -357,13 +413,20 @@ public class HAService {
             return needHeart;
         }
 
+        /**
+         * 向master反馈slave的拉取偏移量
+         * 对于slave端来说，是发送下次待拉取消息偏移量
+         * 对于master端来说，既可以认为是slave本次请求拉取的消息偏移量，也可以理解为slave的消息同步ack确认消息
+         * @param maxOffset
+         * @return
+         */
         private boolean reportSlaveMaxOffset(final long maxOffset) {
             this.reportOffset.position(0);
             this.reportOffset.limit(8);
             this.reportOffset.putLong(maxOffset);
             this.reportOffset.position(0);
             this.reportOffset.limit(8);
-
+            // myq: 为什么需要write 3次？
             for (int i = 0; i < 3 && this.reportOffset.hasRemaining(); i++) {
                 try {
                     this.socketChannel.write(this.reportOffset);
@@ -493,6 +556,11 @@ public class HAService {
             return result;
         }
 
+        /**
+         * slave连接master
+         * @return
+         * @throws ClosedChannelException
+         */
         private boolean connectMaster() throws ClosedChannelException {
             if (null == socketChannel) {
                 String addr = this.masterAddress.get();
@@ -506,7 +574,7 @@ public class HAService {
                         }
                     }
                 }
-
+                // 初始化currentReportedOffset为commitlog文件的最大偏移量
                 this.currentReportedOffset = HAService.this.defaultMessageStore.getMaxPhyOffset();
 
                 this.lastWriteTimestamp = System.currentTimeMillis();
@@ -548,7 +616,7 @@ public class HAService {
 
             while (!this.isStopped()) {
                 try {
-                    if (this.connectMaster()) {
+                    if (this.connectMaster()) { // slave连接master服务器
 
                         if (this.isTimeToReportOffset()) {
                             boolean result = this.reportSlaveMaxOffset(this.currentReportedOffset);
