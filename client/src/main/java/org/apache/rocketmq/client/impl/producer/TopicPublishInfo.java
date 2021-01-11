@@ -27,7 +27,7 @@ public class TopicPublishInfo {
     /**
      * 是否顺序消息
      */
-    private boolean orderTopic = false; 
+    private boolean orderTopic = false;
     private boolean haveTopicRouterInfo = false;
     /**
      * 当前topic的消息队列
@@ -76,7 +76,7 @@ public class TopicPublishInfo {
     }
 
     public MessageQueue selectOneMessageQueue(final String lastBrokerName) {
-        if (lastBrokerName == null) {
+        if (lastBrokerName == null) { // 第一次选择消息队列
             return selectOneMessageQueue();
         } else {
             int index = this.sendWhichQueue.getAndIncrement();

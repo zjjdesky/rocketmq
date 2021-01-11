@@ -280,7 +280,7 @@ public class MQClientAPIImpl {
 
         throw new MQClientException(response.getCode(), response.getRemark());
     }
-    //
+    // 发送消息
     public SendResult sendMessage(
         final String addr,
         final String brokerName,

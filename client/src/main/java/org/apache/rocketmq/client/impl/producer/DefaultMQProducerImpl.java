@@ -169,7 +169,7 @@ public class DefaultMQProducerImpl implements MQProducerInner {
                 }
                 // 2. 创建MQClientInstance实例
                 this.mQClientFactory = MQClientManager.getInstance().getAndCreateMQClientInstance(this.defaultMQProducer, rpcHook);
-                // 3. 注册
+                // 3. 注册MQClientInstance
                 boolean registerOK = mQClientFactory.registerProducer(this.defaultMQProducer.getProducerGroup(), this);
                 if (!registerOK) {
                     this.serviceState = ServiceState.CREATE_JUST;
@@ -181,6 +181,7 @@ public class DefaultMQProducerImpl implements MQProducerInner {
                 this.topicPublishInfoTable.put(this.defaultMQProducer.getCreateTopicKey(), new TopicPublishInfo());
 
                 if (startFactory) {
+                    // 4. 启动MQClientInstance
                     mQClientFactory.start();
                 }
 
@@ -716,10 +717,10 @@ public class DefaultMQProducerImpl implements MQProducerInner {
                 if (!(msg instanceof MessageBatch)) {
                     MessageClientIDSetter.setUniqID(msg);
                 }
-
+                //  sysFlag 给消息添加标记
                 int sysFlag = 0;
                 boolean msgBodyCompressed = false;
-                if (this.tryToCompressMessage(msg)) {
+                if (this.tryToCompressMessage(msg)) { // 判断是否要压缩消息
                     sysFlag |= MessageSysFlag.COMPRESSED_FLAG;
                     msgBodyCompressed = true;
                 }
@@ -881,7 +882,7 @@ public class DefaultMQProducerImpl implements MQProducerInner {
             return false;
         }
         byte[] body = msg.getBody();
-        if (body != null) {
+        if (body != null) { // 如果消息体默认超过4k，则对消息体采用zip压缩
             if (body.length >= this.defaultMQProducer.getCompressMsgBodyOverHowmuch()) {
                 try {
                     byte[] data = UtilAll.compress(body, zipCompressLevel);

@@ -68,35 +68,39 @@ public class DefaultMQProducer extends ClientConfig implements MQProducer {
      *
      * For non-transactional messages, it does not matter as long as it's unique per process.
      * </p>
-     *
+     * 生产者所属组
      * See {@linktourl http://rocketmq.apache.org/docs/core-concept/} for more discussion.
      */
     private String producerGroup;
 
     /**
      * Just for testing or demo program
+     * 默认topicKey
      */
     private String createTopicKey = MixAll.AUTO_CREATE_TOPIC_KEY_TOPIC;
 
     /**
      * Number of queues to create per default topic.
+     * 默认主题在每一个Broker队列数量
      */
     private volatile int defaultTopicQueueNums = 4;
 
     /**
      * Timeout for sending messages.
+     * 发送消息默认超时时间
      */
     private int sendMsgTimeout = 3000;
 
     /**
      * Compress message body threshold, namely, message body larger than 4k will be compressed on default.
+     * 消息超过该值时，启用压缩，默认4k
      */
     private int compressMsgBodyOverHowmuch = 1024 * 4;
 
     /**
      * Maximum number of retry to perform internally before claiming sending failure in synchronous mode.
      * </p>
-     *
+     * 同步方式发送消息的次数，默认为2，总共执行3次
      * This may potentially cause message duplication which is up to application developers to resolve.
      */
     private int retryTimesWhenSendFailed = 2;
@@ -104,18 +108,20 @@ public class DefaultMQProducer extends ClientConfig implements MQProducer {
     /**
      * Maximum number of retry to perform internally before claiming sending failure in asynchronous mode.
      * </p>
-     *
+     * 异步方式发送消息的次数，默认为2，总共执行3次
      * This may potentially cause message duplication which is up to application developers to resolve.
      */
     private int retryTimesWhenSendAsyncFailed = 2;
 
     /**
      * Indicate whether to retry another broker on sending failure internally.
+     * 消息重试时选择另外一个broker时，是否不等待存储结果就返回
      */
     private boolean retryAnotherBrokerWhenNotStoreOK = false;
 
     /**
      * Maximum allowed message size in bytes.
+     * 允许发送消息的最大长度，默认为4M
      */
     private int maxMessageSize = 1024 * 1024 * 4; // 4M
 
